@@ -61,7 +61,7 @@ export default function MyMatchesPage() {
         .order('match_id', { ascending: false })
 
       if (fetchError) throw fetchError
-      setMatches((data as MyMatch[]) || [])
+      setMatches((data as unknown as MyMatch[]) || [])
     } catch (e) {
       console.error('내 매칭 로딩 오류:', e)
       setError('매칭 정보를 불러오는데 실패했습니다.')
