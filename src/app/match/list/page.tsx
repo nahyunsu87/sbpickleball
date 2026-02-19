@@ -91,24 +91,31 @@ export default function MatchListPage() {
     )
   }
 
+  const availableCount = requests.filter(r => r.user_id !== myId).length
+
   return (
     <div className="py-6">
-      <h2 className="text-xl font-bold mb-6">매칭 대기 목록</h2>
+      <div className="mb-6">
+        <h2 className="text-xl font-bold">매칭 대기 목록</h2>
+        <p className="text-sm text-gray-500 mt-1">지금 바로 수락 가능한 매칭 {availableCount}건</p>
+      </div>
 
       {requests.length === 0 ? (
-        <div className="text-center py-16 text-gray-400">
+        <div className="text-center py-16 text-gray-400 card">
           <div className="text-4xl mb-3">🏓</div>
           <p>대기중인 매칭이 없어요</p>
         </div>
       ) : (
         requests.map(req => (
-          <div key={req.id} className="card">
+          <div key={req.id} className="card border border-transparent hover:border-emerald-200 transition">
             <div className="flex items-center gap-3 mb-3">
-              {req.profiles?.avatar_url && (
+              {req.profiles?.avatar_url ? (
                 <img src={req.profiles.avatar_url} className="w-10 h-10 rounded-full" alt="" />
+              ) : (
+                <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-xs">👤</div>
               )}
               <div>
-                <p className="font-bold">{req.profiles?.nickname}</p>
+                <p className="font-bold">{req.profiles?.nickname || '익명 유저'}</p>
                 <p className="text-sm text-gray-500">{skillLabel(req.profiles?.skill_level || '')}</p>
               </div>
               <span className={`ml-auto px-3 py-1 rounded-full text-sm font-bold ${
@@ -118,24 +125,21 @@ export default function MatchListPage() {
               </span>
             </div>
 
-            {req.preferred_date && (
-              <p className="text-sm text-gray-500 mb-1">
-                📅 {req.preferred_date} {req.preferred_time && `${req.preferred_time}`}
-              </p>
-            )}
-            {req.message && (
-              <p className="text-sm text-gray-600 mb-3">💬 {req.message}</p>
-            )}
+            <div className="text-sm text-gray-600 mb-3 space-y-1">
+              {req.preferred_date && (
+                <p>📅 {req.preferred_date} {req.preferred_time && `${req.preferred_time}`}</p>
+              )}
+              {req.message && <p>💬 {req.message}</p>}
+            </div>
 
-            {req.user_id !== myId && (
+            {req.user_id !== myId ? (
               <button
                 onClick={() => acceptMatch(req)}
                 className="btn-primary w-full"
               >
-                매칭 수락하기
+                이 매칭 수락하기
               </button>
-            )}
-            {req.user_id === myId && (
+            ) : (
               <p className="text-center text-sm text-gray-400">내가 신청한 매칭</p>
             )}
           </div>

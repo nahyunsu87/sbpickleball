@@ -106,7 +106,20 @@ export default function ChatPage({ params }: { params: { matchId: string } }) {
 
   return (
     <div className="flex flex-col h-[calc(100vh-120px)]">
+      <div className="text-xs text-gray-500 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2 mb-2">
+        👋 매너 있는 대화로 시간/장소를 빠르게 정해보세요.
+      </div>
+
       <div className="flex-1 overflow-y-auto py-4 space-y-3">
+        {messages.length === 0 && (
+          <div className="h-full flex items-center justify-center text-center text-gray-400">
+            <div>
+              <p className="text-3xl mb-2">💬</p>
+              <p className="text-sm">첫 메시지를 보내 일정 조율을 시작해보세요.</p>
+            </div>
+          </div>
+        )}
+
         {messages.map(msg => {
           const isMine = msg.user_id === myId
           return (
@@ -132,7 +145,7 @@ export default function ChatPage({ params }: { params: { matchId: string } }) {
         })}
         <div ref={bottomRef} />
       </div>
-      <div className="flex gap-2 py-3 border-t bg-gray-50">
+      <div className="flex gap-2 py-3 border-t bg-gray-50 sticky bottom-0">
         <input
           value={newMessage}
           onChange={e => setNewMessage(e.target.value)}

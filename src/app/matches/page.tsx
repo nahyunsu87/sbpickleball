@@ -16,6 +16,12 @@ type MyMatch = {
   } | null
 }
 
+type MatchRow = {
+  match_id: string
+  team: string
+  matches: MyMatch['matches'] | MyMatch['matches'][]
+}
+
 export default function MyMatchesPage() {
   const [matches, setMatches] = useState<MyMatch[]>([])
   const [loading, setLoading] = useState(true)
@@ -48,7 +54,12 @@ export default function MyMatchesPage() {
         .order('match_id', { ascending: false })
 
       if (fetchError) throw fetchError
-      setMatches((data as MyMatch[]) || [])
+
+      const normalized = ((data as MatchRow[] | null) || []).map((row) => ({
+        ...row,
+        matches: Array.isArray(row.matches) ? row.matches[0] || null : row.matches,
+      }))
+      setMatches(normalized)
     } catch (e) {
       console.error('내 매칭 로딩 오류:', e)
       setError('매칭 정보를 불러오는데 실패했습니다.')
@@ -72,10 +83,13 @@ export default function MyMatchesPage() {
 
   return (
     <div className="py-6">
-      <h2 className="text-xl font-bold mb-6">내 매칭</h2>
+      <div className="mb-6">
+        <h2 className="text-xl font-bold">내 매칭</h2>
+        <p className="text-sm text-gray-500 mt-1">진행 중인 대화방을 빠르게 확인하고 일정 조율하세요.</p>
+      </div>
 
       {activeMatches.length === 0 ? (
-        <div className="text-center py-16 text-gray-400">
+        <div className="text-center py-16 text-gray-400 card">
           <div className="text-4xl mb-3">💬</div>
           <p className="mb-4">진행중인 매칭이 없어요</p>
           <Link href="/match/list" className="text-primary text-sm underline">
@@ -84,7 +98,7 @@ export default function MyMatchesPage() {
         </div>
       ) : (
         activeMatches.map(item => (
-          <div key={item.match_id} className="card">
+          <div key={item.match_id} className="card border border-transparent hover:border-emerald-200 transition">
             <div className="flex items-center justify-between mb-2">
               <span className={`px-3 py-1 rounded-full text-sm font-bold ${
                 item.matches?.match_type === '1v1' ? 'bg-blue-100 text-blue-600' : 'bg-purple-100 text-purple-600'
@@ -97,12 +111,12 @@ export default function MyMatchesPage() {
                   : ''}
               </span>
             </div>
-            <p className="text-sm text-gray-500 mb-3">내 팀: {item.team}팀</p>
+            <p className="text-sm text-gray-500 mb-3">내 팀: {item.team}팀 · 상태: 진행중</p>
             <Link
               href={`/chat/${item.match_id}`}
               className="btn-primary w-full text-center block"
             >
-              채팅하기
+              채팅방 입장
             </Link>
           </div>
         ))
