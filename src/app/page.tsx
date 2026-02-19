@@ -5,82 +5,80 @@ import { supabase } from '@/lib/supabase'
 import type { Profile } from '@/lib/supabase'
 import Link from 'next/link'
 
+const SKILL_LABEL: Record<string, string> = {
+  beginner: '초급',
+  intermediate: '중급',
+  advanced: '고급',
+}
+
 export default function Home() {
   const [user, setUser] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    // 먼저 현재 세션 즉시 확인
-    supabase.auth.getSession()
-      .then(async ({ data: { session } }) => {
-        try {
-          if (session?.user) {
-            const { data: profile, error: profileError } = await supabase
-              .from('profiles')
-              .select('*')
-              .eq('id', session.user.id)
-              .single()
-            if (profileError && profileError.code !== 'PGRST116') {
-              console.error('프로필 조회 오류:', profileError)
-            }
-            setUser(profile)
-          }
-        } catch (e) {
-          console.error('프로필 로딩 오류:', e)
-          setError('프로필을 불러오는데 실패했습니다.')
-        } finally {
-          setLoading(false)
-        }
-      })
-      .catch((e) => {
-        console.error('세션 확인 오류:', e)
-        setError('세션 확인에 실패했습니다.')
-        setLoading(false)
-      })
+    let mounted = true
 
-    // 이후 상태 변화 감지
+    // ── 5초 안에 응답이 없으면 로그인 화면으로 fallback ──
+    const timer = setTimeout(() => {
+      if (mounted) setLoading(false)
+    }, 5000)
+
+    // ── 초기 세션 확인 (로컬 스토리지에서 즉시 읽힘) ──
+    async function init() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!mounted) return
+        if (session?.user) {
+          const { data: profile } = await supabase
+            .from('profiles').select('*').eq('id', session.user.id).single()
+          if (mounted) setUser(profile ?? null)
+        }
+      } catch (e) {
+        console.error('init error:', e)
+      } finally {
+        clearTimeout(timer)
+        if (mounted) setLoading(false)
+      }
+    }
+    init()
+
+    // ── 카카오 로그인 콜백 등 이후 이벤트 처리 ──
+    // setLoading(true) 절대 호출 안 함 → 고착 방지
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session?.user) {
-        setLoading(true)
         try {
           const { data: profile } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', session.user.id)
-            .single()
-
-          if (!profile) {
-            const kakaoData = session.user.user_metadata
-            const { data: newProfile } = await supabase
-              .from('profiles')
-              .insert({
-                id: session.user.id,
-                kakao_id: String(kakaoData.provider_id || kakaoData.sub || ''),
-                nickname: kakaoData.name || kakaoData.full_name || kakaoData.preferred_username || '피클볼러',
-                avatar_url: kakaoData.avatar_url || kakaoData.picture || '',
-                skill_level: 'beginner',
-                region_id: null,
-              })
-              .select()
-              .single()
-            setUser(newProfile)
+            .from('profiles').select('*').eq('id', session.user.id).single()
+          if (profile) {
+            if (mounted) setUser(profile)
           } else {
-            setUser(profile)
+            const kakaoData = session.user.user_metadata
+            const { data: newProfile } = await supabase.from('profiles').insert({
+              id: session.user.id,
+              kakao_id: String(kakaoData.provider_id || kakaoData.sub || ''),
+              nickname: kakaoData.name || kakaoData.full_name || kakaoData.preferred_username || '피클볼러',
+              avatar_url: kakaoData.avatar_url || kakaoData.picture || '',
+              skill_level: 'beginner',
+              region_id: null,
+            }).select().single()
+            if (mounted) setUser(newProfile ?? null)
           }
         } catch (e) {
-          console.error('로그인 처리 오류:', e)
-          setError('로그인 처리 중 오류가 발생했습니다.')
+          console.error('auth change error:', e)
         } finally {
-          setLoading(false)
+          clearTimeout(timer)
+          if (mounted) setLoading(false)
         }
       } else if (event === 'SIGNED_OUT') {
-        setUser(null)
-        setLoading(false)
+        if (mounted) { setUser(null); setLoading(false) }
       }
     })
 
-    return () => subscription.unsubscribe()
+    return () => {
+      mounted = false
+      clearTimeout(timer)
+      subscription.unsubscribe()
+    }
   }, [])
 
   async function loginWithKakao() {
@@ -98,81 +96,131 @@ export default function Home() {
     setUser(null)
   }
 
+  /* ── 로딩 ── */
   if (loading) {
     return (
-      <div className="text-center py-20">
-        <div className="text-gray-400 text-lg">잠시만요...</div>
+      <div className="flex flex-col items-center justify-center min-h-[70vh] gap-4">
+        <span className="text-5xl animate-bounce">🏓</span>
+        <div className="w-7 h-7 border-[3px] border-primary border-t-transparent rounded-full animate-spin" />
+        <p className="text-sm text-gray-400">불러오는 중...</p>
       </div>
     )
   }
 
-  if (error) {
+  /* ── 비로그인 랜딩 ── */
+  if (!user) {
     return (
-      <div className="text-center py-20">
-        <p className="text-red-500 mb-4">{error}</p>
-        <button
-          onClick={() => window.location.reload()}
-          className="text-sm text-gray-500 underline"
-        >
-          다시 시도
-        </button>
-      </div>
-    )
-  }
+      <div className="-mx-4 -mt-4 bg-white">
+        {/* 히어로 */}
+        <div className="relative bg-gradient-to-br from-[#00B386] to-[#00D4A0] px-6 pt-14 pb-20 text-white overflow-hidden">
+          <div className="absolute -top-6 -right-6 w-40 h-40 rounded-full bg-white/10" />
+          <div className="absolute -bottom-10 -left-10 w-56 h-56 rounded-full bg-white/5" />
+          <div className="relative">
+            <div className="text-6xl mb-5">🏓</div>
+            <h1 className="text-3xl font-extrabold leading-tight mb-2">
+              전주 피클볼<br />파트너 매칭
+            </h1>
+            <p className="text-emerald-100 text-sm leading-relaxed">
+              원하는 실력의 파트너를 찾고<br />바로 채팅으로 일정을 잡아보세요
+            </p>
+          </div>
+        </div>
 
-  return (
-    <div className="py-8">
-      {!user ? (
-        <div className="text-center py-16">
-          <div className="text-6xl mb-4">🏓</div>
-          <h1 className="text-2xl font-bold mb-2">SB 피클볼 매칭</h1>
-          <p className="text-gray-500 mb-8">전주 피클볼 파트너를 찾아보세요</p>
+        {/* 특징 */}
+        <div className="bg-white rounded-t-3xl -mt-6 relative px-6 pt-8 pb-4">
+          <div className="grid grid-cols-3 gap-3 mb-8">
+            {[
+              { icon: '⚡', label: '즉시 매칭' },
+              { icon: '🏅', label: '실력별' },
+              { icon: '💬', label: '실시간 채팅' },
+            ].map(f => (
+              <div key={f.label} className="bg-gray-50 rounded-2xl py-4 flex flex-col items-center gap-1.5">
+                <span className="text-2xl">{f.icon}</span>
+                <span className="text-xs font-semibold text-gray-600">{f.label}</span>
+              </div>
+            ))}
+          </div>
+
           <button
             onClick={loginWithKakao}
-            className="bg-yellow-400 text-black px-8 py-3 rounded-xl font-bold text-lg hover:bg-yellow-300 transition"
+            className="w-full bg-[#FEE500] text-gray-900 py-4 rounded-2xl font-bold text-base flex items-center justify-center gap-2.5 active:scale-95 transition-transform shadow-sm"
           >
-            카카오로 시작하기
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 3C6.48 3 2 6.48 2 10.8c0 2.7 1.6 5.07 4.02 6.47L5 21l4.5-2.5c.82.2 1.66.3 2.5.3 5.52 0 10-3.48 10-7.8S17.52 3 12 3z" />
+            </svg>
+            카카오로 3초 만에 시작하기
           </button>
-        </div>
-      ) : (
-        <div>
-          <div className="card flex items-center gap-4">
-            {user.avatar_url && (
-              <img src={user.avatar_url} className="w-12 h-12 rounded-full" alt="프로필" />
-            )}
-            <div>
-              <p className="font-bold">{user.nickname}</p>
-              <p className="text-sm text-gray-500">
-                {user.skill_level === 'beginner' ? '초급' : user.skill_level === 'intermediate' ? '중급' : '고급'}
-              </p>
-            </div>
-            <button onClick={logout} className="ml-auto text-sm text-gray-400">로그아웃</button>
-          </div>
 
-          <div className="grid grid-cols-2 gap-4 mb-6">
-            <Link href="/match/request" className="card text-center hover:shadow-md transition cursor-pointer">
-              <div className="text-3xl mb-2">🎯</div>
-              <p className="font-bold">매칭 신청</p>
-              <p className="text-sm text-gray-500">파트너 찾기</p>
-            </Link>
-            <Link href="/match/list" className="card text-center hover:shadow-md transition cursor-pointer">
-              <div className="text-3xl mb-2">📋</div>
-              <p className="font-bold">매칭 목록</p>
-              <p className="text-sm text-gray-500">대기중인 매칭</p>
-            </Link>
-            <Link href="/matches" className="card text-center hover:shadow-md transition cursor-pointer">
-              <div className="text-3xl mb-2">💬</div>
-              <p className="font-bold">내 매칭</p>
-              <p className="text-sm text-gray-500">채팅하기</p>
-            </Link>
-            <Link href="/profile" className="card text-center hover:shadow-md transition cursor-pointer">
-              <div className="text-3xl mb-2">👤</div>
-              <p className="font-bold">프로필</p>
-              <p className="text-sm text-gray-500">설정 변경</p>
-            </Link>
-          </div>
+          <p className="text-center text-xs text-gray-400 mt-3">
+            가입 즉시 무료로 이용할 수 있어요
+          </p>
         </div>
-      )}
+      </div>
+    )
+  }
+
+  /* ── 로그인 대시보드 ── */
+  return (
+    <div className="bg-white -mx-4 -mt-4 px-4 pt-5">
+      {/* 인사말 + 프로필 */}
+      <div className="flex items-center gap-3 mb-6">
+        {user.avatar_url ? (
+          <img src={user.avatar_url} className="w-11 h-11 rounded-full ring-2 ring-primary/30" alt="프로필" />
+        ) : (
+          <div className="w-11 h-11 rounded-full bg-primary/10 flex items-center justify-center text-xl">👤</div>
+        )}
+        <div className="flex-1">
+          <p className="font-bold text-gray-900">{user.nickname}</p>
+          <span className={`text-xs font-semibold ${
+            user.skill_level === 'beginner' ? 'text-green-600' :
+            user.skill_level === 'intermediate' ? 'text-blue-600' : 'text-purple-600'
+          }`}>
+            {SKILL_LABEL[user.skill_level] ?? '초급'}
+          </span>
+        </div>
+        <button onClick={logout} className="text-xs text-gray-400 px-3 py-1.5 rounded-full border border-gray-200">
+          로그아웃
+        </button>
+      </div>
+
+      {/* 메인 CTA */}
+      <Link
+        href="/match/request"
+        className="block w-full bg-primary rounded-2xl p-5 mb-3 text-white relative overflow-hidden active:scale-95 transition-transform"
+      >
+        <div className="absolute -right-4 -top-4 w-24 h-24 rounded-full bg-white/10" />
+        <p className="text-xs font-semibold text-emerald-100 mb-1">지금 바로</p>
+        <p className="text-xl font-extrabold">매칭 신청하기</p>
+        <p className="text-xs text-emerald-100 mt-1">파트너를 찾고 있다면 →</p>
+      </Link>
+
+      {/* 보조 메뉴 */}
+      <div className="grid grid-cols-3 gap-2.5 mb-5">
+        {[
+          { href: '/match/list', icon: '📋', label: '매칭 목록', desc: '대기중' },
+          { href: '/matches', icon: '💬', label: '내 매칭', desc: '채팅' },
+          { href: '/profile', icon: '👤', label: '프로필', desc: '설정' },
+        ].map(item => (
+          <Link
+            key={item.href}
+            href={item.href}
+            className="bg-gray-50 rounded-2xl p-3.5 flex flex-col items-center gap-1.5 active:scale-95 transition-transform"
+          >
+            <span className="text-2xl">{item.icon}</span>
+            <span className="text-xs font-bold text-gray-700">{item.label}</span>
+            <span className="text-[10px] text-gray-400">{item.desc}</span>
+          </Link>
+        ))}
+      </div>
+
+      {/* 안내 */}
+      <div className="bg-amber-50 rounded-2xl p-4 flex gap-3 items-center mb-4">
+        <span className="text-xl flex-shrink-0">💡</span>
+        <p className="text-xs text-amber-700 leading-relaxed">
+          <span className="font-bold">신청 → 수락 → 채팅</span> 순서로 진행돼요.<br />
+          매칭 목록에서 파트너를 찾거나 직접 신청해보세요.
+        </p>
+      </div>
     </div>
   )
 }
