@@ -8,61 +8,86 @@ import Link from 'next/link'
 export default function Home() {
   const [user, setUser] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-useEffect(() => {
-  // 먼저 현재 세션 즉시 확인
-  supabase.auth.getSession().then(async ({ data: { session } }) => {
-    if (session?.user) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', session.user.id)
-        .single()
-      setUser(profile)
-    }
-    setLoading(false)
-  })
+  useEffect(() => {
+    // 먼저 현재 세션 즉시 확인
+    supabase.auth.getSession()
+      .then(async ({ data: { session } }) => {
+        try {
+          if (session?.user) {
+            const { data: profile, error: profileError } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', session.user.id)
+              .single()
+            if (profileError && profileError.code !== 'PGRST116') {
+              console.error('프로필 조회 오류:', profileError)
+            }
+            setUser(profile)
+          }
+        } catch (e) {
+          console.error('프로필 로딩 오류:', e)
+          setError('프로필을 불러오는데 실패했습니다.')
+        } finally {
+          setLoading(false)
+        }
+      })
+      .catch((e) => {
+        console.error('세션 확인 오류:', e)
+        setError('세션 확인에 실패했습니다.')
+        setLoading(false)
+      })
 
-  // 이후 상태 변화 감지
-  const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-    if (event === 'SIGNED_IN' && session?.user) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', session.user.id)
-        .single()
+    // 이후 상태 변화 감지
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
+        setLoading(true)
+        try {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .single()
 
-      if (!profile) {
-        const kakaoData = session.user.user_metadata
-        const { data: newProfile } = await supabase
-          .from('profiles')
-          .insert({
-            id: session.user.id,
-            kakao_id: String(kakaoData.provider_id || kakaoData.sub || ''),
-            nickname: kakaoData.name || kakaoData.full_name || kakaoData.preferred_username || '피클볼러',
-            avatar_url: kakaoData.avatar_url || kakaoData.picture || '',
-            skill_level: 'beginner',
-            region_id: null,
-          })
-          .select()
-          .single()
-        setUser(newProfile)
-      } else {
-        setUser(profile)
+          if (!profile) {
+            const kakaoData = session.user.user_metadata
+            const { data: newProfile } = await supabase
+              .from('profiles')
+              .insert({
+                id: session.user.id,
+                kakao_id: String(kakaoData.provider_id || kakaoData.sub || ''),
+                nickname: kakaoData.name || kakaoData.full_name || kakaoData.preferred_username || '피클볼러',
+                avatar_url: kakaoData.avatar_url || kakaoData.picture || '',
+                skill_level: 'beginner',
+                region_id: null,
+              })
+              .select()
+              .single()
+            setUser(newProfile)
+          } else {
+            setUser(profile)
+          }
+        } catch (e) {
+          console.error('로그인 처리 오류:', e)
+          setError('로그인 처리 중 오류가 발생했습니다.')
+        } finally {
+          setLoading(false)
+        }
+      } else if (event === 'SIGNED_OUT') {
+        setUser(null)
+        setLoading(false)
       }
-    } else if (event === 'SIGNED_OUT') {
-      setUser(null)
-    }
-  })
+    })
 
-  return () => subscription.unsubscribe()
-}, [])
+    return () => subscription.unsubscribe()
+  }, [])
 
   async function loginWithKakao() {
     await supabase.auth.signInWithOAuth({
       provider: 'kakao',
       options: {
-        redirectTo: 'https://sbpickleball.vercel.app/',
+        redirectTo: `${window.location.origin}/`,
         scopes: 'profile_nickname profile_image',
       },
     })
@@ -73,7 +98,27 @@ useEffect(() => {
     setUser(null)
   }
 
-  if (loading) return <div className="text-center py-20">로딩중...</div>
+  if (loading) {
+    return (
+      <div className="text-center py-20">
+        <div className="text-gray-400 text-lg">잠시만요...</div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="text-center py-20">
+        <p className="text-red-500 mb-4">{error}</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="text-sm text-gray-500 underline"
+        >
+          다시 시도
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div className="py-8">

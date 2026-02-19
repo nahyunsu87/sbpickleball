@@ -11,6 +11,7 @@ export default function ProfilePage() {
   const [skillLevel, setSkillLevel] = useState('beginner')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
 
   useEffect(() => {
@@ -18,35 +19,61 @@ export default function ProfilePage() {
   }, [])
 
   async function loadProfile() {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) { router.push('/'); return }
+    try {
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+      if (sessionError) throw sessionError
+      if (!session) { router.push('/'); return }
 
-    const { data } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', session.user.id)
-      .single()
+      const { data, error: fetchError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', session.user.id)
+        .single()
 
-    if (data) {
-      setProfile(data)
-      setNickname(data.nickname)
-      setSkillLevel(data.skill_level)
+      if (fetchError) throw fetchError
+
+      if (data) {
+        setProfile(data)
+        setNickname(data.nickname)
+        setSkillLevel(data.skill_level)
+      }
+    } catch (e) {
+      console.error('프로필 로딩 오류:', e)
+      setError('프로필을 불러오는데 실패했습니다.')
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   async function saveProfile() {
     if (!profile) return
+    setError(null)
     setSaving(true)
-    await supabase
-      .from('profiles')
-      .update({ nickname, skill_level: skillLevel })
-      .eq('id', profile.id)
-    setSaving(false)
-    alert('저장됐어요!')
+    try {
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ nickname, skill_level: skillLevel })
+        .eq('id', profile.id)
+      if (updateError) throw updateError
+      alert('저장됐어요!')
+    } catch (e) {
+      console.error('프로필 저장 오류:', e)
+      setError('저장 중 오류가 발생했습니다. 다시 시도해주세요.')
+    } finally {
+      setSaving(false)
+    }
   }
 
-  if (loading) return <div className="text-center py-20">로딩중...</div>
+  if (loading) return <div className="text-center py-20 text-gray-400">프로필 불러오는 중...</div>
+
+  if (error && !profile) {
+    return (
+      <div className="text-center py-20">
+        <p className="text-red-500 mb-4">{error}</p>
+        <button onClick={loadProfile} className="text-sm text-gray-500 underline">다시 시도</button>
+      </div>
+    )
+  }
 
   return (
     <div className="py-6">
@@ -55,6 +82,12 @@ export default function ProfilePage() {
       {profile?.avatar_url && (
         <div className="text-center mb-6">
           <img src={profile.avatar_url} className="w-20 h-20 rounded-full mx-auto" alt="프로필" />
+        </div>
+      )}
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-600 rounded-lg p-3 mb-4 text-sm">
+          {error}
         </div>
       )}
 

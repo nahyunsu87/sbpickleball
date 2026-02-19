@@ -11,6 +11,7 @@ export default function MatchRequestPage() {
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
   const [regionId, setRegionId] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
 
   useEffect(() => {
@@ -18,39 +19,59 @@ export default function MatchRequestPage() {
   }, [])
 
   async function loadRegion() {
-    const { data } = await supabase
-      .from('regions')
-      .select('id')
-      .eq('slug', 'jeonju')
-      .single()
-    if (data) setRegionId(data.id)
+    try {
+      const { data, error: fetchError } = await supabase
+        .from('regions')
+        .select('id')
+        .eq('slug', 'jeonju')
+        .single()
+      if (fetchError) {
+        console.error('지역 정보 로딩 오류:', fetchError)
+      }
+      if (data) setRegionId(data.id)
+    } catch (e) {
+      console.error('지역 정보 로딩 오류:', e)
+    }
   }
 
   async function submitRequest() {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) { router.push('/'); return }
+    setError(null)
+    try {
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+      if (sessionError) throw sessionError
+      if (!session) { router.push('/'); return }
 
-    setLoading(true)
-    const { error } = await supabase.from('match_requests').insert({
-      user_id: session.user.id,
-      region_id: regionId,
-      match_type: matchType,
-      preferred_date: preferredDate || null,
-      preferred_time: preferredTime || null,
-      message: message || null,
-      status: 'waiting',
-    })
+      setLoading(true)
+      const { error: insertError } = await supabase.from('match_requests').insert({
+        user_id: session.user.id,
+        region_id: regionId,
+        match_type: matchType,
+        preferred_date: preferredDate || null,
+        preferred_time: preferredTime || null,
+        message: message || null,
+        status: 'waiting',
+      })
 
-    setLoading(false)
-    if (!error) {
+      if (insertError) throw insertError
       alert('매칭 신청 완료!')
       router.push('/match/list')
+    } catch (e) {
+      console.error('매칭 신청 오류:', e)
+      setError('매칭 신청 중 오류가 발생했습니다. 다시 시도해주세요.')
+    } finally {
+      setLoading(false)
     }
   }
 
   return (
     <div className="py-6">
       <h2 className="text-xl font-bold mb-6">매칭 신청</h2>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-600 rounded-lg p-3 mb-4 text-sm">
+          {error}
+        </div>
+      )}
 
       <div className="card">
         <div className="mb-4">

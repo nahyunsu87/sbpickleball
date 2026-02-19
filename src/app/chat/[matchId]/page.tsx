@@ -10,6 +10,7 @@ export default function ChatPage({ params }: { params: { matchId: string } }) {
   const [newMessage, setNewMessage] = useState('')
   const [myId, setMyId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
 
@@ -22,46 +23,67 @@ export default function ChatPage({ params }: { params: { matchId: string } }) {
   }, [messages])
 
   async function initChat() {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) { router.push('/'); return }
-    setMyId(session.user.id)
+    try {
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+      if (sessionError) throw sessionError
+      if (!session) { router.push('/'); return }
+      setMyId(session.user.id)
 
-    const { data } = await supabase
-      .from('messages')
-      .select('*, profiles(nickname, avatar_url)')
-      .eq('match_id', params.matchId)
-      .order('created_at', { ascending: true })
+      const { data, error: fetchError } = await supabase
+        .from('messages')
+        .select('*, profiles(nickname, avatar_url)')
+        .eq('match_id', params.matchId)
+        .order('created_at', { ascending: true })
 
-    setMessages(data || [])
-    setLoading(false)
+      if (fetchError) throw fetchError
+      setMessages(data || [])
 
-    supabase
-      .channel(`chat:${params.matchId}`)
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'messages',
-        filter: `match_id=eq.${params.matchId}`,
-      }, async (payload) => {
-        const { data: msg } = await supabase
-          .from('messages')
-          .select('*, profiles(nickname, avatar_url)')
-          .eq('id', payload.new.id)
-          .single()
-        if (msg) setMessages(prev => [...prev, msg])
-      })
-      .subscribe()
+      supabase
+        .channel(`chat:${params.matchId}`)
+        .on('postgres_changes', {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `match_id=eq.${params.matchId}`,
+        }, async (payload) => {
+          try {
+            const { data: msg } = await supabase
+              .from('messages')
+              .select('*, profiles(nickname, avatar_url)')
+              .eq('id', payload.new.id)
+              .single()
+            if (msg) setMessages(prev => [...prev, msg])
+          } catch (e) {
+            console.error('메시지 수신 오류:', e)
+          }
+        })
+        .subscribe()
+    } catch (e) {
+      console.error('채팅 초기화 오류:', e)
+      setError('채팅을 불러오는데 실패했습니다.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   async function sendMessage() {
     if (!newMessage.trim() || !myId) return
     const content = newMessage.trim()
     setNewMessage('')
-    await supabase.from('messages').insert({
-      match_id: params.matchId,
-      user_id: myId,
-      content,
-    })
+    try {
+      const { error: sendError } = await supabase.from('messages').insert({
+        match_id: params.matchId,
+        user_id: myId,
+        content,
+      })
+      if (sendError) {
+        console.error('메시지 전송 오류:', sendError)
+        setNewMessage(content)
+      }
+    } catch (e) {
+      console.error('메시지 전송 오류:', e)
+      setNewMessage(content)
+    }
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
@@ -71,7 +93,16 @@ export default function ChatPage({ params }: { params: { matchId: string } }) {
     }
   }
 
-  if (loading) return <div className="text-center py-20">로딩중...</div>
+  if (loading) return <div className="text-center py-20 text-gray-400">채팅 불러오는 중...</div>
+
+  if (error) {
+    return (
+      <div className="text-center py-20">
+        <p className="text-red-500 mb-4">{error}</p>
+        <button onClick={initChat} className="text-sm text-gray-500 underline">다시 시도</button>
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col h-[calc(100vh-120px)]">
