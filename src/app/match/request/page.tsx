@@ -16,6 +16,11 @@ export default function MatchRequestPage() {
 
   useEffect(() => {
     loadRegion()
+    // ── Feature 2: 스마트 디폴트 ──
+    const lastType = localStorage.getItem('lastMatchType') as '1v1' | '2v2' | null
+    const lastTime = localStorage.getItem('lastMatchTime')
+    if (lastType) setMatchType(lastType)
+    if (lastTime) setPreferredTime(lastTime)
   }, [])
 
   async function loadRegion() {
@@ -50,6 +55,11 @@ export default function MatchRequestPage() {
       })
 
       if (insertError) throw insertError
+
+      // ── Feature 2: 마지막 선택 저장 ──
+      localStorage.setItem('lastMatchType', matchType)
+      if (preferredTime) localStorage.setItem('lastMatchTime', preferredTime)
+
       router.push('/match/list')
     } catch (e) {
       console.error('매칭 신청 오류:', e)
