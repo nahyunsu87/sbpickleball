@@ -6,10 +6,10 @@ import { supabase } from '@/lib/supabase'
 
 type MatchParticipant = {
   user_id: string
-  profiles: {
+  profiles: Array<{
     nickname: string
     avatar_url: string | null
-  } | null
+  }> | null
 }
 
 type ScoreKey = 'teamwork_score' | 'language_score' | 'rule_score' | 'punctuality_score'
@@ -139,7 +139,7 @@ export default function ReviewPage({ params }: { params: { matchId: string } }) 
         >
           {targets.map((target) => (
             <option key={target.user_id} value={target.user_id}>
-              {target.profiles?.nickname || '상대 유저'}
+              {target.profiles?.[0]?.nickname || '상대 유저'}
             </option>
           ))}
         </select>
