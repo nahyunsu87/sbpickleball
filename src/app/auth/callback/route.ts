@@ -24,8 +24,8 @@ export async function GET(request: Request) {
       if (!existing) {
         await supabase.from('profiles').insert({
           id: session.user.id,
-          kakao_id: kakaoData.provider_id,
-          nickname: kakaoData.name || kakaoData.full_name || '피클볼러',
+          kakao_id: String(kakaoData.provider_id || kakaoData.sub || ''),
+          nickname: kakaoData.name || kakaoData.full_name || kakaoData.preferred_username || '피클볼러',
           avatar_url: kakaoData.avatar_url || kakaoData.picture || '',
           skill_level: 'beginner',
           region_id: null,
