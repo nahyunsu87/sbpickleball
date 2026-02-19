@@ -139,9 +139,10 @@ export default function Home() {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center py-24 gap-3">
-        <div className="w-10 h-10 rounded-full skeleton" />
-        <div className="w-32 h-4 skeleton" />
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+        <span className="text-5xl animate-bounce">🏓</span>
+        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+        <p className="text-sm text-gray-400 mt-1">불러오는 중...</p>
       </div>
     )
   }
