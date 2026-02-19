@@ -1,0 +1,123 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { supabase } from '@/lib/supabase'
+import type { MatchRequest } from '@/lib/supabase'
+import { useRouter } from 'next/navigation'
+
+export default function MatchListPage() {
+  const [requests, setRequests] = useState<MatchRequest[]>([])
+  const [loading, setLoading] = useState(true)
+  const [myId, setMyId] = useState<string | null>(null)
+  const router = useRouter()
+
+  useEffect(() => {
+    loadRequests()
+  }, [])
+
+  async function loadRequests() {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) { router.push('/'); return }
+    setMyId(session.user.id)
+
+    const { data } = await supabase
+      .from('match_requests')
+      .select('*, profiles(nickname, skill_level, avatar_url)')
+      .eq('status', 'waiting')
+      .order('created_at', { ascending: false })
+
+    setRequests(data || [])
+    setLoading(false)
+  }
+
+  async function acceptMatch(request: MatchRequest) {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) return
+
+    // 매치 생성
+    const { data: match } = await supabase
+      .from('matches')
+      .insert({
+        region_id: request.region_id,
+        match_type: request.match_type,
+        status: 'active',
+      })
+      .select()
+      .single()
+
+    if (!match) return
+
+    // 참여자 추가
+    await supabase.from('match_participants').insert([
+      { match_id: match.id, user_id: request.user_id, team: 'A' },
+      { match_id: match.id, user_id: session.user.id, team: 'B' },
+    ])
+
+    // 요청 상태 업데이트
+    await supabase
+      .from('match_requests')
+      .update({ status: 'matched' })
+      .eq('id', request.id)
+
+    alert('매칭 성사! 채팅으로 이동합니다.')
+    router.push(`/chat/${match.id}`)
+  }
+
+  const skillLabel = (level: string) =>
+    level === 'beginner' ? '초급' : level === 'intermediate' ? '중급' : '고급'
+
+  if (loading) return <div className="text-center py-20">로딩중...</div>
+
+  return (
+    <div className="py-6">
+      <h2 className="text-xl font-bold mb-6">매칭 대기 목록</h2>
+
+      {requests.length === 0 ? (
+        <div className="text-center py-16 text-gray-400">
+          <div className="text-4xl mb-3">🏓</div>
+          <p>대기중인 매칭이 없어요</p>
+        </div>
+      ) : (
+        requests.map(req => (
+          <div key={req.id} className="card">
+            <div className="flex items-center gap-3 mb-3">
+              {req.profiles?.avatar_url && (
+                <img src={req.profiles.avatar_url} className="w-10 h-10 rounded-full" alt="" />
+              )}
+              <div>
+                <p className="font-bold">{req.profiles?.nickname}</p>
+                <p className="text-sm text-gray-500">{skillLabel(req.profiles?.skill_level || '')}</p>
+              </div>
+              <span className={`ml-auto px-3 py-1 rounded-full text-sm font-bold ${
+                req.match_type === '1v1' ? 'bg-blue-100 text-blue-600' : 'bg-purple-100 text-purple-600'
+              }`}>
+                {req.match_type === '1v1' ? '단식' : '복식'}
+              </span>
+            </div>
+
+            {req.preferred_date && (
+              <p className="text-sm text-gray-500 mb-1">
+                📅 {req.preferred_date} {req.preferred_time && `${req.preferred_time}`}
+              </p>
+            )}
+            {req.message && (
+              <p className="text-sm text-gray-600 mb-3">💬 {req.message}</p>
+            )}
+
+            {req.user_id !== myId && (
+              <button
+                onClick={() => acceptMatch(req)}
+                className="btn-primary w-full"
+              >
+                매칭 수락하기
+              </button>
+            )}
+            {req.user_id === myId && (
+              <p className="text-center text-sm text-gray-400">내가 신청한 매칭</p>
+            )}
+          </div>
+        ))
+      )}
+    </div>
+  )
+}
