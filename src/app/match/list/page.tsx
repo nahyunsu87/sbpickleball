@@ -18,6 +18,41 @@ function relativeTime(dateStr: string) {
   return `${Math.floor(h / 24)}일 전`
 }
 
+// ── Feature 3: 시간/요일 기반 컨텍스트 ──
+function getContextBanner() {
+  const now = new Date()
+  const hour = now.getHours()
+  const day = now.getDay() // 0=일, 6=토
+  const isWeekend = day === 0 || day === 6
+
+  if (hour >= 17 && hour < 22) {
+    return { icon: '🌆', text: '오늘 저녁 경기 어때요?', sub: '마감임박 매칭을 먼저 보여드려요', sort: 'evening' as const }
+  }
+  if (isWeekend && hour >= 6 && hour < 12) {
+    return { icon: '☀️', text: '주말 아침 경기 찾아볼까요?', sub: '여유로운 경기를 먼저 보여드려요', sort: 'morning' as const }
+  }
+  return null
+}
+
+function sortByContext(requests: MatchRequest[], sort: 'evening' | 'morning') {
+  return [...requests].sort((a, b) => {
+    const aTime = a.preferred_time ? parseInt(a.preferred_time.replace(':', '')) : -1
+    const bTime = b.preferred_time ? parseInt(b.preferred_time.replace(':', '')) : -1
+    if (sort === 'evening') {
+      const aEvening = aTime >= 1700 && aTime < 2200
+      const bEvening = bTime >= 1700 && bTime < 2200
+      if (aEvening && !bEvening) return -1
+      if (!aEvening && bEvening) return 1
+    } else {
+      const aMorning = aTime === -1 || (aTime >= 600 && aTime < 1200)
+      const bMorning = bTime === -1 || (bTime >= 600 && bTime < 1200)
+      if (aMorning && !bMorning) return -1
+      if (!aMorning && bMorning) return 1
+    }
+    return 0
+  })
+}
+
 function SkeletonCard() {
   return (
     <div className="card">
@@ -55,6 +90,8 @@ export default function MatchListPage() {
   const [filter, setFilter] = useState<Filter>('all')
   const router = useRouter()
 
+  const contextBanner = getContextBanner()
+
   useEffect(() => { loadRequests() }, [])
 
   async function loadRequests() {
@@ -82,7 +119,10 @@ export default function MatchListPage() {
   }
 
   async function acceptMatch(request: MatchRequest) {
+    // ── Feature 5: 옵티미스틱 UI - 즉시 카드 제거 ──
     setAccepting(request.id)
+    setRequests(prev => prev.filter(r => r.id !== request.id))
+
     try {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) return
@@ -106,13 +146,20 @@ export default function MatchListPage() {
 
       router.push(`/chat/${match.id}`)
     } catch {
+      // 실패 시 카드 복원
+      setRequests(prev => [request, ...prev])
       alert('매칭 수락 중 오류가 발생했습니다.')
     } finally {
       setAccepting(null)
     }
   }
 
-  const filtered = requests.filter(r => filter === 'all' || r.match_type === filter)
+  let filtered = requests.filter(r => filter === 'all' || r.match_type === filter)
+  // ── Feature 3: 컨텍스트 기반 정렬 ──
+  if (contextBanner?.sort) {
+    filtered = sortByContext(filtered, contextBanner.sort)
+  }
+
   const myCount = requests.filter(r => r.user_id === myId).length
 
   if (loading) {
@@ -155,6 +202,17 @@ export default function MatchListPage() {
         </button>
       </div>
 
+      {/* ── Feature 3: 컨텍스트 배너 ── */}
+      {contextBanner && requests.length > 0 && (
+        <div className="bg-blue-50 rounded-2xl px-4 py-3 mb-3 flex items-center gap-3">
+          <span className="text-xl">{contextBanner.icon}</span>
+          <div>
+            <p className="text-xs font-bold text-blue-800">{contextBanner.text}</p>
+            <p className="text-[10px] text-blue-500 mt-0.5">{contextBanner.sub}</p>
+          </div>
+        </div>
+      )}
+
       {/* 필터 칩 */}
       <div className="flex gap-2 mb-4 overflow-x-auto pb-1 -mx-4 px-4 scrollbar-none">
         {([
@@ -188,6 +246,7 @@ export default function MatchListPage() {
         filtered.map(req => {
           const isMine = req.user_id === myId
           const skill = req.profiles?.skill_level ?? ''
+          const isAccepting = accepting === req.id
           return (
             <div key={req.id} className="card">
               {/* 상단: 아바타 + 이름 + 타입 */}
@@ -237,12 +296,17 @@ export default function MatchListPage() {
                   <p className="text-sm text-gray-500">파트너 대기중이에요</p>
                 </div>
               ) : (
+                // ── Feature 5: 즉각적인 피드백 ──
                 <button
                   onClick={() => acceptMatch(req)}
                   disabled={!!accepting}
-                  className="btn-primary w-full"
+                  className={`w-full rounded-xl py-3 font-bold text-sm transition-all ${
+                    isAccepting
+                      ? 'bg-primary text-white'
+                      : 'btn-primary'
+                  }`}
                 >
-                  {accepting === req.id ? '수락 중...' : '매칭 수락하기'}
+                  {isAccepting ? '✓ 수락 완료!' : '매칭 수락하기'}
                 </button>
               )}
             </div>

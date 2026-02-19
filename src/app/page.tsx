@@ -11,27 +11,47 @@ const SKILL_LABEL: Record<string, string> = {
   advanced: '고급',
 }
 
+type RecentMatch = { id: string; match_type: string; status: string }
+
 export default function Home() {
   const [user, setUser] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
 
+  // 원탭 상태
+  const [isAvailable, setIsAvailable] = useState(false)
+  const [availableRequestId, setAvailableRequestId] = useState<string | null>(null)
+  const [availableLoading, setAvailableLoading] = useState(false)
+  const [regionId, setRegionId] = useState<string | null>(null)
+
+  // 재진입 숏컷
+  const [recentMatches, setRecentMatches] = useState<RecentMatch[]>([])
+
   useEffect(() => {
     let mounted = true
 
-    // ── 5초 안에 응답이 없으면 로그인 화면으로 fallback ──
     const timer = setTimeout(() => {
       if (mounted) setLoading(false)
     }, 5000)
 
-    // ── 초기 세션 확인 (로컬 스토리지에서 즉시 읽힘) ──
     async function init() {
       try {
         const { data: { session } } = await supabase.auth.getSession()
         if (!mounted) return
         if (session?.user) {
-          const { data: profile } = await supabase
-            .from('profiles').select('*').eq('id', session.user.id).single()
-          if (mounted) setUser(profile ?? null)
+          const [{ data: profile }, { data: region }] = await Promise.all([
+            supabase.from('profiles').select('*').eq('id', session.user.id).single(),
+            supabase.from('regions').select('id').eq('slug', 'jeonju').single(),
+          ])
+          if (mounted) {
+            setUser(profile ?? null)
+            if (region) setRegionId(region.id)
+            if (profile) {
+              await Promise.all([
+                loadUserStatus(session.user.id),
+                loadRecentMatches(session.user.id),
+              ])
+            }
+          }
         }
       } catch (e) {
         console.error('init error:', e)
@@ -42,8 +62,6 @@ export default function Home() {
     }
     init()
 
-    // ── 카카오 로그인 콜백 등 이후 이벤트 처리 ──
-    // setLoading(true) 절대 호출 안 함 → 고착 방지
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session?.user) {
         try {
@@ -51,6 +69,10 @@ export default function Home() {
             .from('profiles').select('*').eq('id', session.user.id).single()
           if (profile) {
             if (mounted) setUser(profile)
+            await Promise.all([
+              loadUserStatus(session.user.id),
+              loadRecentMatches(session.user.id),
+            ])
           } else {
             const kakaoData = session.user.user_metadata
             const { data: newProfile } = await supabase.from('profiles').insert({
@@ -80,6 +102,71 @@ export default function Home() {
       subscription.unsubscribe()
     }
   }, [])
+
+  async function loadUserStatus(userId: string) {
+    const { data } = await supabase
+      .from('match_requests')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('status', 'waiting')
+      .limit(1)
+    setIsAvailable(!!(data && data.length > 0))
+    setAvailableRequestId(data?.[0]?.id ?? null)
+  }
+
+  async function loadRecentMatches(userId: string) {
+    const { data } = await supabase
+      .from('match_participants')
+      .select('matches(id, match_type, status)')
+      .eq('user_id', userId)
+      .order('match_id', { ascending: false })
+      .limit(3)
+    if (data) {
+      const matches = data
+        .map((p: any) => p.matches)
+        .filter((m: any) => m && m.status === 'active')
+      setRecentMatches(matches.slice(0, 2))
+    }
+  }
+
+  async function toggleAvailability() {
+    if (!user || !regionId) return
+    setAvailableLoading(true)
+    try {
+      if (isAvailable && availableRequestId) {
+        await supabase
+          .from('match_requests')
+          .update({ status: 'cancelled' })
+          .eq('id', availableRequestId)
+        setIsAvailable(false)
+        setAvailableRequestId(null)
+      } else {
+        const lastMatchType = (typeof window !== 'undefined'
+          ? localStorage.getItem('lastMatchType')
+          : null) ?? '1v1'
+        const lastMatchTime = typeof window !== 'undefined'
+          ? localStorage.getItem('lastMatchTime')
+          : null
+        const { data } = await supabase
+          .from('match_requests')
+          .insert({
+            user_id: user.id,
+            region_id: regionId,
+            match_type: lastMatchType,
+            preferred_time: lastMatchTime || null,
+            status: 'waiting',
+          })
+          .select('id')
+          .single()
+        setIsAvailable(true)
+        setAvailableRequestId((data as any)?.id ?? null)
+      }
+    } catch (e) {
+      console.error('availability toggle error:', e)
+    } finally {
+      setAvailableLoading(false)
+    }
+  }
 
   async function loginWithKakao() {
     await supabase.auth.signInWithOAuth({
@@ -163,7 +250,7 @@ export default function Home() {
   return (
     <div className="bg-white -mx-4 -mt-4 px-4 pt-5">
       {/* 인사말 + 프로필 */}
-      <div className="flex items-center gap-3 mb-6">
+      <div className="flex items-center gap-3 mb-5">
         {user.avatar_url ? (
           <img src={user.avatar_url} className="w-11 h-11 rounded-full ring-2 ring-primary/30" alt="프로필" />
         ) : (
@@ -182,6 +269,59 @@ export default function Home() {
           로그아웃
         </button>
       </div>
+
+      {/* ── Feature 1: 원탭 상태 토글 ── */}
+      <button
+        onClick={toggleAvailability}
+        disabled={availableLoading}
+        className={`w-full rounded-2xl p-4 mb-3 flex items-center justify-between transition-all active:scale-95 disabled:opacity-70 ${
+          isAvailable
+            ? 'bg-primary text-white shadow-md shadow-primary/30'
+            : 'bg-gray-100 text-gray-700'
+        }`}
+      >
+        <div className="flex items-center gap-3">
+          <span className={`text-2xl ${isAvailable ? 'animate-bounce' : ''}`}>
+            {isAvailable ? '🏓' : '😴'}
+          </span>
+          <div className="text-left">
+            <p className="font-extrabold text-sm">
+              {isAvailable ? '지금 뛸 수 있어요!' : '지금 뛸 수 있어요?'}
+            </p>
+            <p className={`text-xs mt-0.5 ${isAvailable ? 'text-emerald-100' : 'text-gray-400'}`}>
+              {isAvailable ? '파트너가 나타나면 알림을 받아요' : '탭 한 번으로 매칭 신청'}
+            </p>
+          </div>
+        </div>
+        {/* 토글 스위치 */}
+        <div className={`w-12 h-6 rounded-full transition-all flex items-center px-0.5 ${
+          isAvailable ? 'bg-white/30 justify-end' : 'bg-gray-300 justify-start'
+        }`}>
+          <div className="w-5 h-5 rounded-full bg-white shadow" />
+        </div>
+      </button>
+
+      {/* ── Feature 6: 재진입 숏컷 (진행 중인 매칭) ── */}
+      {recentMatches.length > 0 && (
+        <div className="mb-3">
+          <p className="text-xs font-semibold text-gray-400 mb-2 px-1">진행 중인 매칭</p>
+          <div className="flex gap-2">
+            {recentMatches.map(m => (
+              <Link
+                key={m.id}
+                href={`/chat/${m.id}`}
+                className="flex-1 bg-amber-50 border border-amber-100 rounded-2xl p-3 flex items-center gap-2.5 active:scale-95 transition-transform"
+              >
+                <span className="text-xl">{m.match_type === '1v1' ? '🎯' : '🤝'}</span>
+                <div>
+                  <p className="text-xs font-bold text-amber-800">{m.match_type === '1v1' ? '단식' : '복식'}</p>
+                  <p className="text-[10px] text-amber-500">채팅 이어하기 →</p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 메인 CTA */}
       <Link
