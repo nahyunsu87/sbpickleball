@@ -10,44 +10,46 @@ export default function Home() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    checkUser()
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
-        loadProfile(session.user.id)
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .single()
+
+        if (!profile) {
+          const kakaoData = session.user.user_metadata
+          const { data: newProfile } = await supabase
+            .from('profiles')
+            .insert({
+              id: session.user.id,
+              kakao_id: String(kakaoData.provider_id || kakaoData.sub || ''),
+              nickname: kakaoData.name || kakaoData.full_name || kakaoData.preferred_username || '피클볼러',
+              avatar_url: kakaoData.avatar_url || kakaoData.picture || '',
+              skill_level: 'beginner',
+              region_id: null,
+            })
+            .select()
+            .single()
+          setUser(newProfile)
+        } else {
+          setUser(profile)
+        }
       } else {
         setUser(null)
-        setLoading(false)
       }
+      setLoading(false)
     })
 
     return () => subscription.unsubscribe()
   }, [])
 
-  async function checkUser() {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (session?.user) {
-      await loadProfile(session.user.id)
-    } else {
-      setLoading(false)
-    }
-  }
-
-  async function loadProfile(userId: string) {
-    const { data } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single()
-    setUser(data)
-    setLoading(false)
-  }
-
   async function loginWithKakao() {
     await supabase.auth.signInWithOAuth({
       provider: 'kakao',
       options: {
-        redirectTo: `https://sbpickleball.vercel.app/`,
+        redirectTo: 'https://sbpickleball.vercel.app/',
         scopes: 'profile_nickname profile_image',
       },
     })
