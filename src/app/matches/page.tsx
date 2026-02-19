@@ -29,6 +29,57 @@ function SkeletonCard() {
   )
 }
 
+function MatchCard({ item, status }: { item: MyMatch; status: 'active' | 'completed' }) {
+  const isActive = status === 'active'
+
+  return (
+    <div key={item.match_id} className="card">
+      <div className="flex items-center justify-between mb-3">
+        <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
+          item.matches?.match_type === '1v1' ? 'bg-sky-100 text-sky-600' : 'bg-violet-100 text-violet-600'
+        }`}>
+          {item.matches?.match_type === '1v1' ? '단식' : '복식'}
+        </span>
+        <span className="text-xs text-gray-400">
+          {item.matches?.created_at
+            ? new Date(item.matches.created_at).toLocaleDateString('ko-KR', {
+              month: 'long', day: 'numeric'
+            })
+            : ''}
+        </span>
+      </div>
+
+      <div className="flex items-center gap-2 mb-4">
+        <span className="text-lg">🏅</span>
+        <p className="text-sm text-gray-600">
+          내 팀: <span className="font-bold text-gray-800">{item.team}팀</span>
+        </p>
+        {isActive ? (
+          <span className="ml-auto flex items-center gap-1 text-xs text-emerald-600 font-medium">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            진행중
+          </span>
+        ) : (
+          <span className="ml-auto text-xs font-medium text-gray-500">경기 완료</span>
+        )}
+      </div>
+
+      {isActive ? (
+        <Link href={`/chat/${item.match_id}`} className="btn-primary w-full flex items-center justify-center gap-2">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          </svg>
+          채팅하기
+        </Link>
+      ) : (
+        <Link href={`/review/${item.match_id}`} className="btn-secondary w-full flex items-center justify-center gap-2">
+          ✍️ 리뷰 작성하기
+        </Link>
+      )}
+    </div>
+  )
+}
+
 export default function MyMatchesPage() {
   const [matches, setMatches] = useState<MyMatch[]>([])
   const [loading, setLoading] = useState(true)
@@ -90,12 +141,13 @@ export default function MyMatchesPage() {
   }
 
   const activeMatches = matches.filter(m => m.matches?.status === 'active')
+  const completedMatches = matches.filter(m => m.matches?.status === 'completed')
 
   return (
     <div className="py-2">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-bold text-gray-900">내 매칭</h2>
-        <span className="text-sm text-gray-400">{activeMatches.length}개</span>
+        <span className="text-sm text-gray-400">진행중 {activeMatches.length}개</span>
       </div>
 
       {activeMatches.length === 0 ? (
@@ -108,45 +160,20 @@ export default function MyMatchesPage() {
           </Link>
         </div>
       ) : (
-        activeMatches.map(item => (
-          <div key={item.match_id} className="card">
-            <div className="flex items-center justify-between mb-3">
-              <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                item.matches?.match_type === '1v1' ? 'bg-sky-100 text-sky-600' : 'bg-violet-100 text-violet-600'
-              }`}>
-                {item.matches?.match_type === '1v1' ? '단식' : '복식'}
-              </span>
-              <span className="text-xs text-gray-400">
-                {item.matches?.created_at
-                  ? new Date(item.matches.created_at).toLocaleDateString('ko-KR', {
-                      month: 'long', day: 'numeric'
-                    })
-                  : ''}
-              </span>
-            </div>
+        activeMatches.map(item => <MatchCard key={item.match_id} item={item} status="active" />)
+      )}
 
-            <div className="flex items-center gap-2 mb-4">
-              <span className="text-lg">🏅</span>
-              <p className="text-sm text-gray-600">
-                내 팀: <span className="font-bold text-gray-800">{item.team}팀</span>
-              </p>
-              <span className="ml-auto flex items-center gap-1 text-xs text-emerald-600 font-medium">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                진행중
-              </span>
-            </div>
+      <div className="mt-8 mb-3 flex items-center justify-between">
+        <h3 className="text-base font-bold text-gray-900">완료 경기</h3>
+        <span className="text-sm text-gray-400">{completedMatches.length}개</span>
+      </div>
 
-            <Link
-              href={`/chat/${item.match_id}`}
-              className="btn-primary w-full flex items-center justify-center gap-2"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-              </svg>
-              채팅하기
-            </Link>
-          </div>
-        ))
+      {completedMatches.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-gray-200 px-4 py-8 text-center text-sm text-gray-400">
+          아직 완료된 경기가 없어요.
+        </div>
+      ) : (
+        completedMatches.map(item => <MatchCard key={item.match_id} item={item} status="completed" />)
       )}
     </div>
   )
