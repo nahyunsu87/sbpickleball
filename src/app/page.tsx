@@ -9,41 +9,54 @@ export default function Home() {
   const [user, setUser] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
-        const { data: profile } = await supabase
+useEffect(() => {
+  // 먼저 현재 세션 즉시 확인
+  supabase.auth.getSession().then(async ({ data: { session } }) => {
+    if (session?.user) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', session.user.id)
+        .single()
+      setUser(profile)
+    }
+    setLoading(false)
+  })
+
+  // 이후 상태 변화 감지
+  const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    if (event === 'SIGNED_IN' && session?.user) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', session.user.id)
+        .single()
+
+      if (!profile) {
+        const kakaoData = session.user.user_metadata
+        const { data: newProfile } = await supabase
           .from('profiles')
-          .select('*')
-          .eq('id', session.user.id)
+          .insert({
+            id: session.user.id,
+            kakao_id: String(kakaoData.provider_id || kakaoData.sub || ''),
+            nickname: kakaoData.name || kakaoData.full_name || kakaoData.preferred_username || '피클볼러',
+            avatar_url: kakaoData.avatar_url || kakaoData.picture || '',
+            skill_level: 'beginner',
+            region_id: null,
+          })
+          .select()
           .single()
-
-        if (!profile) {
-          const kakaoData = session.user.user_metadata
-          const { data: newProfile } = await supabase
-            .from('profiles')
-            .insert({
-              id: session.user.id,
-              kakao_id: String(kakaoData.provider_id || kakaoData.sub || ''),
-              nickname: kakaoData.name || kakaoData.full_name || kakaoData.preferred_username || '피클볼러',
-              avatar_url: kakaoData.avatar_url || kakaoData.picture || '',
-              skill_level: 'beginner',
-              region_id: null,
-            })
-            .select()
-            .single()
-          setUser(newProfile)
-        } else {
-          setUser(profile)
-        }
+        setUser(newProfile)
       } else {
-        setUser(null)
+        setUser(profile)
       }
-      setLoading(false)
-    })
+    } else if (event === 'SIGNED_OUT') {
+      setUser(null)
+    }
+  })
 
-    return () => subscription.unsubscribe()
-  }, [])
+  return () => subscription.unsubscribe()
+}, [])
 
   async function loginWithKakao() {
     await supabase.auth.signInWithOAuth({
