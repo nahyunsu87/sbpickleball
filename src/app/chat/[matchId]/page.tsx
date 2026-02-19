@@ -35,7 +35,6 @@ export default function ChatPage({ params }: { params: { matchId: string } }) {
     setMessages(data || [])
     setLoading(false)
 
-    // 실시간 구독
     supabase
       .channel(`chat:${params.matchId}`)
       .on('postgres_changes', {
@@ -58,7 +57,6 @@ export default function ChatPage({ params }: { params: { matchId: string } }) {
     if (!newMessage.trim() || !myId) return
     const content = newMessage.trim()
     setNewMessage('')
-
     await supabase.from('messages').insert({
       match_id: params.matchId,
       user_id: myId,
@@ -78,24 +76,46 @@ export default function ChatPage({ params }: { params: { matchId: string } }) {
   return (
     <div className="flex flex-col h-[calc(100vh-120px)]">
       <div className="flex-1 overflow-y-auto py-4 space-y-3">
-        {messages.map(msg => (
-          <div key={msg.id} className={`flex gap-2 ${msg.user_id === myId ? 'flex-row-reverse' : ''}`}>
-            {msg.user_id !== myId && (
-              msg.profiles?.avatar_url ? (
-                <img src={msg.profiles.avatar_url} className="w-8 h-8 rounded-full flex-shrink-0" alt="" />
-              ) : (
-                <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-xs flex-shrink-0">👤</div>
-              )
-            )}
-            <div className={`max-w-[70%] ${msg.user_id === myId ? 'items-end' : 'items-start'} flex flex-col`}>
-              {msg.user_id !== myId && (
-                <p className="text-xs text-gray-500 mb-1">{msg.profiles?.nickname}</p>
+        {messages.map(msg => {
+          const isMine = msg.user_id === myId
+          return (
+            <div key={msg.id} className={`flex gap-2 ${isMine ? 'flex-row-reverse' : ''}`}>
+              {!isMine && (
+                msg.profiles?.avatar_url
+                  ? <img src={msg.profiles.avatar_url} className="w-8 h-8 rounded-full flex-shrink-0" alt="" />
+                  : <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-xs flex-shrink-0">👤</div>
               )}
-              <div className={`px-3 py-2 rounded-2xl text-sm ${
-                msg.user_id === myId
-                  ? 'bg-primary text-white rounded-tr-sm'
-                  : 'bg-white shadow rounded-tl-sm'
-              }`}>
-                {msg.content}
+              <div className={`max-w-[70%] flex flex-col ${isMine ? 'items-end' : 'items-start'}`}>
+                {!isMine && (
+                  <p className="text-xs text-gray-500 mb-1">{msg.profiles?.nickname}</p>
+                )}
+                <div className={`px-3 py-2 rounded-2xl text-sm ${isMine ? 'bg-primary text-white rounded-tr-sm' : 'bg-white shadow rounded-tl-sm'}`}>
+                  {msg.content}
+                </div>
+                <p className="text-xs text-gray-400 mt-1">
+                  {new Date(msg.created_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
+                </p>
               </div>
-              <p className="text-xs text-gray-400 mt-
+            </div>
+          )
+        })}
+        <div ref={bottomRef} />
+      </div>
+      <div className="flex gap-2 py-3 border-t bg-gray-50">
+        <input
+          value={newMessage}
+          onChange={e => setNewMessage(e.target.value)}
+          onKeyDown={handleKeyDown}
+          className="flex-1 border rounded-full px-4 py-2 text-sm focus:outline-none focus:border-primary"
+          placeholder="메시지 입력..."
+        />
+        <button
+          onClick={sendMessage}
+          className="bg-primary text-white w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
+        >
+          ➤
+        </button>
+      </div>
+    </div>
+  )
+}
