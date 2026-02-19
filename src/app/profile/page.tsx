@@ -4,11 +4,13 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import type { Profile } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
+import TrustIndicator from '@/app/components/TrustIndicator'
 
 const SKILL_OPTIONS = [
-  { value: 'beginner', label: '초급', desc: '입문 ~ 6개월', color: 'text-green-600', selected: 'bg-green-50 border-green-300' },
-  { value: 'intermediate', label: '중급', desc: '6개월 ~ 2년', color: 'text-blue-600', selected: 'bg-blue-50 border-blue-300' },
-  { value: 'advanced', label: '고급', desc: '2년 이상', color: 'text-purple-600', selected: 'bg-purple-50 border-purple-300' },
+  { value: 'fun',          label: '매너/즐겁게', desc: '승패보다 즐거운 경기', color: 'text-orange-500', selected: 'bg-orange-50 border-orange-300' },
+  { value: 'beginner',     label: '초급',        desc: '입문 ~ 6개월',         color: 'text-green-600', selected: 'bg-green-50 border-green-300' },
+  { value: 'intermediate', label: '중급',        desc: '6개월 ~ 2년',          color: 'text-blue-600',  selected: 'bg-blue-50 border-blue-300' },
+  { value: 'advanced',     label: '고급',        desc: '2년 이상',             color: 'text-purple-600',selected: 'bg-purple-50 border-purple-300' },
 ] as const
 
 export default function ProfilePage() {
@@ -179,6 +181,9 @@ export default function ProfilePage() {
       >
         {saving ? '저장 중...' : '저장하기'}
       </button>
+
+      {/* 신뢰 지표 */}
+      {profile && <TrustIndicator userId={profile.id} />}
     </div>
   )
 }

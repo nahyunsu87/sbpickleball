@@ -59,6 +59,7 @@ body {
 }
 
 /* ── 실력 뱃지 ── */
+.skill-fun          { @apply text-xs font-bold text-orange-500; }
 .skill-beginner     { @apply text-xs font-bold text-green-600; }
 .skill-intermediate { @apply text-xs font-bold text-blue-600; }
 .skill-advanced     { @apply text-xs font-bold text-purple-600; }

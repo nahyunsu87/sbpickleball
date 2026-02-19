@@ -71,11 +71,13 @@ function SkeletonCard() {
 }
 
 const SKILL_CLASS: Record<string, string> = {
+  fun: 'skill-fun',
   beginner: 'skill-beginner',
   intermediate: 'skill-intermediate',
   advanced: 'skill-advanced',
 }
 const SKILL_LABEL: Record<string, string> = {
+  fun: '즐겁게',
   beginner: '초급',
   intermediate: '중급',
   advanced: '고급',
@@ -88,6 +90,7 @@ export default function MatchListPage() {
   const [myId, setMyId] = useState<string | null>(null)
   const [accepting, setAccepting] = useState<string | null>(null)
   const [filter, setFilter] = useState<Filter>('all')
+  const [userStats, setUserStats] = useState<Record<string, { games: number }>>({})
   const router = useRouter()
 
   const contextBanner = getContextBanner()
@@ -111,6 +114,24 @@ export default function MatchListPage() {
 
       if (fe) throw fe
       setRequests(data || [])
+
+      // 신뢰 지표: 카드에 표시할 유저별 완료 경기 수 조회 (단일 쿼리)
+      const userIds = [...new Set((data || []).map((r: any) => r.user_id))]
+      if (userIds.length > 0) {
+        const { data: parts } = await supabase
+          .from('match_participants')
+          .select('user_id, matches(status)')
+          .in('user_id', userIds)
+
+        const statsMap: Record<string, { games: number }> = {}
+        ;(parts || []).forEach((p: any) => {
+          if (p.matches?.status === 'completed') {
+            if (!statsMap[p.user_id]) statsMap[p.user_id] = { games: 0 }
+            statsMap[p.user_id].games++
+          }
+        })
+        setUserStats(statsMap)
+      }
     } catch (e) {
       setError('목록을 불러오는데 실패했습니다.')
     } finally {
@@ -269,6 +290,17 @@ export default function MatchListPage() {
                   {req.match_type === '1v1' ? '단식' : '복식'}
                 </span>
               </div>
+
+              {/* 신뢰 미니 지표 */}
+              {(() => {
+                const s = userStats[req.user_id]
+                if (!s || s.games === 0) return null
+                return (
+                  <div className="flex items-center gap-1.5 mb-2 text-[11px] text-gray-400">
+                    <span>🏓 경기 {s.games}회</span>
+                  </div>
+                )
+              })()}
 
               {/* 중단: 일정 + 메시지 */}
               {(req.preferred_date || req.message) && (
