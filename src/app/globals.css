@@ -22,3 +22,11 @@ body {
 .card {
   @apply bg-white rounded-xl shadow p-4 mb-4;
 }
+
+.hero-card {
+  @apply rounded-2xl p-7 bg-gradient-to-b from-emerald-50 to-white border border-emerald-100 shadow-sm;
+}
+
+.pill {
+  @apply px-2.5 py-1 rounded-full bg-white border border-gray-200;
+}
