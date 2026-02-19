@@ -11,8 +11,19 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    let isMounted = true
+
+    const withTimeout = <T,>(promise: Promise<T>, ms = 8000): Promise<T> => {
+      return Promise.race([
+        promise,
+        new Promise<T>((_, reject) => {
+          setTimeout(() => reject(new Error('timeout')), ms)
+        }),
+      ])
+    }
+
     // 먼저 현재 세션 즉시 확인
-    supabase.auth.getSession()
+    withTimeout(supabase.auth.getSession())
       .then(async ({ data: { session } }) => {
         try {
           if (session?.user) {
@@ -24,25 +35,27 @@ export default function Home() {
             if (profileError && profileError.code !== 'PGRST116') {
               console.error('프로필 조회 오류:', profileError)
             }
-            setUser(profile)
+            if (isMounted) setUser(profile)
           }
         } catch (e) {
           console.error('프로필 로딩 오류:', e)
-          setError('프로필을 불러오는데 실패했습니다.')
+          if (isMounted) setError('프로필을 불러오는데 실패했습니다.')
         } finally {
-          setLoading(false)
+          if (isMounted) setLoading(false)
         }
       })
       .catch((e) => {
         console.error('세션 확인 오류:', e)
-        setError('세션 확인에 실패했습니다.')
-        setLoading(false)
+        if (isMounted) {
+          setError('세션 확인에 실패했습니다. 네트워크를 확인하고 다시 시도해주세요.')
+          setLoading(false)
+        }
       })
 
     // 이후 상태 변화 감지
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session?.user) {
-        setLoading(true)
+        if (isMounted) setLoading(true)
         try {
           const { data: profile } = await supabase
             .from('profiles')
@@ -64,23 +77,28 @@ export default function Home() {
               })
               .select()
               .single()
-            setUser(newProfile)
+            if (isMounted) setUser(newProfile)
           } else {
-            setUser(profile)
+            if (isMounted) setUser(profile)
           }
         } catch (e) {
           console.error('로그인 처리 오류:', e)
-          setError('로그인 처리 중 오류가 발생했습니다.')
+          if (isMounted) setError('로그인 처리 중 오류가 발생했습니다.')
         } finally {
-          setLoading(false)
+          if (isMounted) setLoading(false)
         }
       } else if (event === 'SIGNED_OUT') {
-        setUser(null)
-        setLoading(false)
+        if (isMounted) {
+          setUser(null)
+          setLoading(false)
+        }
       }
     })
 
-    return () => subscription.unsubscribe()
+    return () => {
+      isMounted = false
+      subscription.unsubscribe()
+    }
   }, [])
 
   async function loginWithKakao() {
