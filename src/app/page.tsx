@@ -5,13 +5,53 @@ import { supabase } from '@/lib/supabase'
 import type { Profile } from '@/lib/supabase'
 import Link from 'next/link'
 
+const SKILL_LABEL: Record<string, string> = {
+  beginner: '초급',
+  intermediate: '중급',
+  advanced: '고급',
+}
+
+const quickActions = [
+  {
+    href: '/match/request',
+    icon: '🎯',
+    label: '매칭 신청',
+    desc: '파트너 찾기',
+    bg: 'bg-emerald-50',
+    iconBg: 'bg-emerald-100',
+  },
+  {
+    href: '/match/list',
+    icon: '📋',
+    label: '매칭 목록',
+    desc: '대기중인 매칭',
+    bg: 'bg-sky-50',
+    iconBg: 'bg-sky-100',
+  },
+  {
+    href: '/matches',
+    icon: '💬',
+    label: '내 매칭',
+    desc: '채팅하기',
+    bg: 'bg-violet-50',
+    iconBg: 'bg-violet-100',
+  },
+  {
+    href: '/profile',
+    icon: '👤',
+    label: '프로필',
+    desc: '설정 변경',
+    bg: 'bg-amber-50',
+    iconBg: 'bg-amber-100',
+  },
+]
+
 export default function Home() {
   const [user, setUser] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    // 먼저 현재 세션 즉시 확인
     supabase.auth.getSession()
       .then(async ({ data: { session } }) => {
         try {
@@ -39,7 +79,6 @@ export default function Home() {
         setLoading(false)
       })
 
-    // 이후 상태 변화 감지
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session?.user) {
         setLoading(true)
@@ -100,8 +139,9 @@ export default function Home() {
 
   if (loading) {
     return (
-      <div className="text-center py-20">
-        <div className="text-gray-400 text-lg">잠시만요...</div>
+      <div className="flex flex-col items-center justify-center py-24 gap-3">
+        <div className="w-10 h-10 rounded-full skeleton" />
+        <div className="w-32 h-4 skeleton" />
       </div>
     )
   }
@@ -120,59 +160,99 @@ export default function Home() {
     )
   }
 
-  return (
-    <div className="py-8">
-      {!user ? (
-        <div className="text-center py-16">
+  /* ── 비로그인 히어로 ── */
+  if (!user) {
+    return (
+      <div className="-mx-4 -mt-4">
+        {/* 히어로 그라데이션 */}
+        <div className="bg-gradient-to-br from-primary to-emerald-400 px-6 pt-12 pb-16 text-white text-center">
           <div className="text-6xl mb-4">🏓</div>
           <h1 className="text-2xl font-bold mb-2">SB 피클볼 매칭</h1>
-          <p className="text-gray-500 mb-8">전주 피클볼 파트너를 찾아보세요</p>
+          <p className="text-emerald-50 text-sm">전주에서 피클볼 파트너를 찾아보세요</p>
+        </div>
+
+        {/* 특징 카드 */}
+        <div className="bg-white rounded-t-3xl -mt-6 px-6 pt-8 pb-6">
+          <ul className="space-y-4 mb-8">
+            {[
+              { icon: '⚡', title: '빠른 매칭', desc: '대기중인 파트너와 즉시 연결' },
+              { icon: '💬', title: '실시간 채팅', desc: '매칭 후 바로 일정 조율' },
+              { icon: '🏅', title: '실력별 매칭', desc: '초급 · 중급 · 고급 레벨 선택' },
+            ].map(f => (
+              <li key={f.title} className="flex items-start gap-4">
+                <span className="text-2xl">{f.icon}</span>
+                <div>
+                  <p className="font-semibold text-gray-800">{f.title}</p>
+                  <p className="text-sm text-gray-500">{f.desc}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+
           <button
             onClick={loginWithKakao}
-            className="bg-yellow-400 text-black px-8 py-3 rounded-xl font-bold text-lg hover:bg-yellow-300 transition"
+            className="w-full bg-yellow-400 text-gray-900 py-4 rounded-2xl font-bold text-base flex items-center justify-center gap-2 hover:bg-yellow-300 active:scale-95 transition-all"
           >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 3C6.48 3 2 6.48 2 10.8c0 2.7 1.6 5.07 4.02 6.47L5 21l4.5-2.5c.82.2 1.66.3 2.5.3 5.52 0 10-3.48 10-7.8S17.52 3 12 3z"/>
+            </svg>
             카카오로 시작하기
           </button>
         </div>
-      ) : (
-        <div>
-          <div className="card flex items-center gap-4">
-            {user.avatar_url && (
-              <img src={user.avatar_url} className="w-12 h-12 rounded-full" alt="프로필" />
-            )}
-            <div>
-              <p className="font-bold">{user.nickname}</p>
-              <p className="text-sm text-gray-500">
-                {user.skill_level === 'beginner' ? '초급' : user.skill_level === 'intermediate' ? '중급' : '고급'}
-              </p>
-            </div>
-            <button onClick={logout} className="ml-auto text-sm text-gray-400">로그아웃</button>
-          </div>
+      </div>
+    )
+  }
 
-          <div className="grid grid-cols-2 gap-4 mb-6">
-            <Link href="/match/request" className="card text-center hover:shadow-md transition cursor-pointer">
-              <div className="text-3xl mb-2">🎯</div>
-              <p className="font-bold">매칭 신청</p>
-              <p className="text-sm text-gray-500">파트너 찾기</p>
-            </Link>
-            <Link href="/match/list" className="card text-center hover:shadow-md transition cursor-pointer">
-              <div className="text-3xl mb-2">📋</div>
-              <p className="font-bold">매칭 목록</p>
-              <p className="text-sm text-gray-500">대기중인 매칭</p>
-            </Link>
-            <Link href="/matches" className="card text-center hover:shadow-md transition cursor-pointer">
-              <div className="text-3xl mb-2">💬</div>
-              <p className="font-bold">내 매칭</p>
-              <p className="text-sm text-gray-500">채팅하기</p>
-            </Link>
-            <Link href="/profile" className="card text-center hover:shadow-md transition cursor-pointer">
-              <div className="text-3xl mb-2">👤</div>
-              <p className="font-bold">프로필</p>
-              <p className="text-sm text-gray-500">설정 변경</p>
-            </Link>
-          </div>
+  /* ── 로그인 대시보드 ── */
+  return (
+    <div>
+      {/* 프로필 카드 */}
+      <div className="bg-gradient-to-r from-primary to-emerald-400 rounded-2xl p-4 mb-4 text-white flex items-center gap-3">
+        {user.avatar_url ? (
+          <img src={user.avatar_url} className="w-12 h-12 rounded-full ring-2 ring-white/50" alt="프로필" />
+        ) : (
+          <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center text-xl">👤</div>
+        )}
+        <div className="flex-1">
+          <p className="font-bold text-base">{user.nickname}</p>
+          <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full">
+            {SKILL_LABEL[user.skill_level] ?? '초급'}
+          </span>
         </div>
-      )}
+        <button onClick={logout} className="text-xs text-white/70 hover:text-white transition">
+          로그아웃
+        </button>
+      </div>
+
+      {/* 빠른 메뉴 */}
+      <div className="grid grid-cols-2 gap-3">
+        {quickActions.map(action => (
+          <Link
+            key={action.href}
+            href={action.href}
+            className={`${action.bg} rounded-2xl p-4 flex flex-col gap-3 active:scale-95 transition-transform`}
+          >
+            <div className={`${action.iconBg} w-10 h-10 rounded-xl flex items-center justify-center text-xl`}>
+              {action.icon}
+            </div>
+            <div>
+              <p className="font-bold text-gray-800 text-sm">{action.label}</p>
+              <p className="text-xs text-gray-500">{action.desc}</p>
+            </div>
+          </Link>
+        ))}
+      </div>
+
+      {/* 안내 배너 */}
+      <div className="mt-4 bg-amber-50 border border-amber-100 rounded-2xl p-4 flex gap-3 items-start">
+        <span className="text-xl">💡</span>
+        <div>
+          <p className="text-sm font-semibold text-amber-800">이렇게 사용하세요</p>
+          <p className="text-xs text-amber-700 mt-0.5">
+            매칭 신청 → 상대방이 수락 → 채팅으로 일정 조율
+          </p>
+        </div>
+      </div>
     </div>
   )
 }
