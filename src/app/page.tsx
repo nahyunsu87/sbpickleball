@@ -26,15 +26,16 @@ export default function Home() {
     setLoading(false)
   }
 
+  
   async function loginWithKakao() {
     await supabase.auth.signInWithOAuth({
       provider: 'kakao',
       options: {
         redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback`,
+        scopes: 'profile_nickname profile_image',
       },
     })
   }
-
   async function logout() {
     await supabase.auth.signOut()
     setUser(null)
