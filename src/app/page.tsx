@@ -11,22 +11,38 @@ export default function Home() {
 
   useEffect(() => {
     checkUser()
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        loadProfile(session.user.id)
+      } else {
+        setUser(null)
+        setLoading(false)
+      }
+    })
+
+    return () => subscription.unsubscribe()
   }, [])
 
   async function checkUser() {
     const { data: { session } } = await supabase.auth.getSession()
     if (session?.user) {
-      const { data } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', session.user.id)
-        .single()
-      setUser(data)
+      await loadProfile(session.user.id)
+    } else {
+      setLoading(false)
     }
+  }
+
+  async function loadProfile(userId: string) {
+    const { data } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .single()
+    setUser(data)
     setLoading(false)
   }
 
-  
   async function loginWithKakao() {
     await supabase.auth.signInWithOAuth({
       provider: 'kakao',
@@ -36,6 +52,7 @@ export default function Home() {
       },
     })
   }
+
   async function logout() {
     await supabase.auth.signOut()
     setUser(null)
