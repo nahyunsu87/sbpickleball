@@ -7,61 +7,88 @@
   --secondary: #FFB800;
 }
 
+html, body {
+  background: #ffffff;
+}
+
 body {
   font-family: 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
   -webkit-font-smoothing: antialiased;
+  color: #111827;
 }
 
 /* ── 버튼 ── */
 .btn-primary {
-  @apply bg-primary text-white px-4 py-3 rounded-xl font-semibold hover:opacity-90 active:scale-95 transition-all duration-150 text-center;
+  @apply bg-primary text-white px-4 py-3 rounded-xl font-semibold
+         hover:opacity-90 active:scale-[0.97] transition-all duration-150
+         text-center disabled:opacity-50 disabled:cursor-not-allowed;
 }
 
 .btn-secondary {
-  @apply bg-gray-100 text-gray-700 px-4 py-3 rounded-xl font-semibold hover:bg-gray-200 active:scale-95 transition-all duration-150 text-center;
+  @apply bg-gray-100 text-gray-700 px-4 py-3 rounded-xl font-semibold
+         hover:bg-gray-200 active:scale-[0.97] transition-all duration-150 text-center;
+}
+
+.btn-outline {
+  @apply border border-gray-200 text-gray-600 px-4 py-2.5 rounded-xl font-semibold
+         hover:bg-gray-50 active:scale-[0.97] transition-all duration-150 text-center text-sm;
 }
 
 /* ── 카드 ── */
 .card {
-  @apply bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-3;
+  @apply bg-white rounded-2xl border border-gray-100 p-4 mb-3;
+  box-shadow: 0 1px 4px rgba(0,0,0,.06);
 }
 
-/* ── 입력 필드 ── */
+/* ── 입력 ── */
 .input {
-  @apply w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white;
+  @apply w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-white
+         focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary
+         transition placeholder-gray-400;
 }
 
-/* ── 뱃지 ── */
-.badge-beginner  { @apply px-2.5 py-0.5 rounded-full text-xs font-bold bg-green-100 text-green-600; }
-.badge-intermediate { @apply px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-600; }
-.badge-advanced  { @apply px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-100 text-purple-600; }
-.badge-singles   { @apply px-2.5 py-0.5 rounded-full text-xs font-bold bg-sky-100 text-sky-600; }
-.badge-doubles   { @apply px-2.5 py-0.5 rounded-full text-xs font-bold bg-violet-100 text-violet-600; }
+/* ── 필터 칩 ── */
+.chip {
+  @apply px-3.5 py-1.5 rounded-full text-sm font-medium border transition-all;
+}
+.chip-active {
+  @apply bg-primary text-white border-primary;
+}
+.chip-inactive {
+  @apply bg-white text-gray-500 border-gray-200;
+}
+
+/* ── 실력 뱃지 ── */
+.skill-beginner     { @apply text-xs font-bold text-green-600; }
+.skill-intermediate { @apply text-xs font-bold text-blue-600; }
+.skill-advanced     { @apply text-xs font-bold text-purple-600; }
+
+/* ── 게임 타입 뱃지 ── */
+.type-singles { @apply px-2.5 py-0.5 rounded-full text-xs font-bold bg-sky-50 text-sky-600; }
+.type-doubles { @apply px-2.5 py-0.5 rounded-full text-xs font-bold bg-violet-50 text-violet-600; }
 
 /* ── 스켈레톤 ── */
 @keyframes shimmer {
-  0%   { background-position: -400px 0; }
-  100% { background-position: 400px 0; }
+  0%   { background-position: -600px 0; }
+  100% { background-position: 600px 0; }
 }
-
 .skeleton {
-  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-  background-size: 800px 100%;
-  animation: shimmer 1.4s infinite linear;
-  border-radius: 8px;
+  background: linear-gradient(90deg, #F3F4F6 25%, #E9EAEC 50%, #F3F4F6 75%);
+  background-size: 1200px 100%;
+  animation: shimmer 1.6s infinite linear;
+  border-radius: 10px;
 }
 
-/* ── 페이지 전환 ── */
+/* ── 페이지 진입 ── */
 main {
-  animation: fadeIn 0.2s ease;
+  animation: pageIn 0.18s ease;
 }
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(6px); }
+@keyframes pageIn {
+  from { opacity: 0; transform: translateY(5px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* ── 하단 네비 safe area ── */
+/* ── 하단 네비 여백 ── */
 .pb-nav {
-  padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px));
 }
