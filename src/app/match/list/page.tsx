@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation'
 export default function MatchListPage() {
   const [requests, setRequests] = useState<MatchRequest[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [myId, setMyId] = useState<string | null>(null)
   const router = useRouter()
 
@@ -16,57 +17,79 @@ export default function MatchListPage() {
   }, [])
 
   async function loadRequests() {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) { router.push('/'); return }
-    setMyId(session.user.id)
+    try {
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+      if (sessionError) throw sessionError
+      if (!session) { router.push('/'); return }
+      setMyId(session.user.id)
 
-    const { data } = await supabase
-      .from('match_requests')
-      .select('*, profiles(nickname, skill_level, avatar_url)')
-      .eq('status', 'waiting')
-      .order('created_at', { ascending: false })
+      const { data, error: fetchError } = await supabase
+        .from('match_requests')
+        .select('*, profiles(nickname, skill_level, avatar_url)')
+        .eq('status', 'waiting')
+        .order('created_at', { ascending: false })
 
-    setRequests(data || [])
-    setLoading(false)
+      if (fetchError) throw fetchError
+      setRequests(data || [])
+    } catch (e) {
+      console.error('매칭 목록 로딩 오류:', e)
+      setError('매칭 목록을 불러오는데 실패했습니다.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   async function acceptMatch(request: MatchRequest) {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) return
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) return
 
-    // 매치 생성
-    const { data: match } = await supabase
-      .from('matches')
-      .insert({
-        region_id: request.region_id,
-        match_type: request.match_type,
-        status: 'active',
-      })
-      .select()
-      .single()
+      const { data: match, error: matchError } = await supabase
+        .from('matches')
+        .insert({
+          region_id: request.region_id,
+          match_type: request.match_type,
+          status: 'active',
+        })
+        .select()
+        .single()
 
-    if (!match) return
+      if (matchError) throw matchError
+      if (!match) return
 
-    // 참여자 추가
-    await supabase.from('match_participants').insert([
-      { match_id: match.id, user_id: request.user_id, team: 'A' },
-      { match_id: match.id, user_id: session.user.id, team: 'B' },
-    ])
+      const { error: participantError } = await supabase.from('match_participants').insert([
+        { match_id: match.id, user_id: request.user_id, team: 'A' },
+        { match_id: match.id, user_id: session.user.id, team: 'B' },
+      ])
+      if (participantError) throw participantError
 
-    // 요청 상태 업데이트
-    await supabase
-      .from('match_requests')
-      .update({ status: 'matched' })
-      .eq('id', request.id)
+      const { error: updateError } = await supabase
+        .from('match_requests')
+        .update({ status: 'matched' })
+        .eq('id', request.id)
+      if (updateError) throw updateError
 
-    alert('매칭 성사! 채팅으로 이동합니다.')
-    router.push(`/chat/${match.id}`)
+      alert('매칭 성사! 채팅으로 이동합니다.')
+      router.push(`/chat/${match.id}`)
+    } catch (e) {
+      console.error('매칭 수락 오류:', e)
+      alert('매칭 수락 중 오류가 발생했습니다. 다시 시도해주세요.')
+    }
   }
 
   const skillLabel = (level: string) =>
     level === 'beginner' ? '초급' : level === 'intermediate' ? '중급' : '고급'
 
-  if (loading) return <div className="text-center py-20">로딩중...</div>
+  if (loading) return <div className="text-center py-20 text-gray-400">매칭 목록 불러오는 중...</div>
+
+  if (error) {
+    return (
+      <div className="text-center py-20">
+        <p className="text-red-500 mb-4">{error}</p>
+        <button onClick={loadRequests} className="text-sm text-gray-500 underline">다시 시도</button>
+      </div>
+    )
+  }
 
   return (
     <div className="py-6">
