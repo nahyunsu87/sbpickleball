@@ -47,7 +47,7 @@ export default function Home() {
     await supabase.auth.signInWithOAuth({
       provider: 'kakao',
       options: {
-        redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback`,
+        redirectTo: `https://sbpickleball.vercel.app/`,
         scopes: 'profile_nickname profile_image',
       },
     })
