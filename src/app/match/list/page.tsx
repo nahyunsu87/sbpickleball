@@ -90,7 +90,7 @@ export default function MatchListPage() {
   const [myId, setMyId] = useState<string | null>(null)
   const [accepting, setAccepting] = useState<string | null>(null)
   const [filter, setFilter] = useState<Filter>('all')
-  const [userStats, setUserStats] = useState<Record<string, { games: number }>>({})
+  const [userStats, setUserStats] = useState<Record<string, { games: number; manner: number; reviews: number }>>({})
   const router = useRouter()
 
   const contextBanner = getContextBanner()
@@ -116,18 +116,44 @@ export default function MatchListPage() {
       setRequests(data || [])
 
       // 신뢰 지표: 카드에 표시할 유저별 완료 경기 수 조회 (단일 쿼리)
-      const userIds = [...new Set((data || []).map((r: any) => r.user_id))]
+      const userIdMap: Record<string, boolean> = {}
+      ;(data || []).forEach((r: any) => {
+        if (r.user_id) userIdMap[r.user_id] = true
+      })
+      const userIds = Object.keys(userIdMap)
       if (userIds.length > 0) {
         const { data: parts } = await supabase
           .from('match_participants')
           .select('user_id, matches(status)')
           .in('user_id', userIds)
 
-        const statsMap: Record<string, { games: number }> = {}
+        const statsMap: Record<string, { games: number; manner: number; reviews: number }> = {}
         ;(parts || []).forEach((p: any) => {
           if (p.matches?.status === 'completed') {
-            if (!statsMap[p.user_id]) statsMap[p.user_id] = { games: 0 }
+            if (!statsMap[p.user_id]) statsMap[p.user_id] = { games: 0, manner: 0, reviews: 0 }
             statsMap[p.user_id].games++
+          }
+        })
+
+        const { data: reviewRows } = await supabase
+          .from('user_reviews')
+          .select('reviewed_id, teamwork_score, language_score, rule_score, punctuality_score')
+          .in('reviewed_id', userIds)
+
+        ;(reviewRows || []).forEach((r: any) => {
+          if (!statsMap[r.reviewed_id]) statsMap[r.reviewed_id] = { games: 0, manner: 0, reviews: 0 }
+          const vals = [r.teamwork_score, r.language_score, r.rule_score, r.punctuality_score].filter(Boolean)
+          if (vals.length > 0) {
+            const rowAvg = vals.reduce((a: number, b: number) => a + b, 0) / vals.length
+            statsMap[r.reviewed_id].manner += rowAvg
+            statsMap[r.reviewed_id].reviews += 1
+          }
+        })
+
+        Object.keys(statsMap).forEach((uid) => {
+          const reviews = statsMap[uid].reviews
+          if (reviews > 0) {
+            statsMap[uid].manner = statsMap[uid].manner / reviews
           }
         })
         setUserStats(statsMap)
@@ -294,10 +320,12 @@ export default function MatchListPage() {
               {/* 신뢰 미니 지표 */}
               {(() => {
                 const s = userStats[req.user_id]
-                if (!s || s.games === 0) return null
+                if (!s || (s.games === 0 && s.reviews === 0)) return null
                 return (
-                  <div className="flex items-center gap-1.5 mb-2 text-[11px] text-gray-400">
-                    <span>🏓 경기 {s.games}회</span>
+                  <div className="flex items-center gap-2 mb-2 text-[11px] text-gray-500 flex-wrap">
+                    {s.reviews > 0 && <span>⭐ {s.manner.toFixed(1)}</span>}
+                    {s.games > 0 && <span>🏓 {s.games}경기</span>}
+                    {s.reviews > 0 ? <span className="text-gray-400">표본 {s.reviews}개</span> : <span className="text-gray-400">리뷰 없음</span>}
                   </div>
                 )
               })()}

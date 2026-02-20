@@ -11,6 +11,8 @@ export default function ChatPage({ params }: { params: { matchId: string } }) {
   const [myId, setMyId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [matchStatus, setMatchStatus] = useState<'active' | 'completed' | 'cancelled' | null>(null)
+  const [completing, setCompleting] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
 
@@ -38,6 +40,15 @@ export default function ChatPage({ params }: { params: { matchId: string } }) {
       if (fetchError) throw fetchError
       setMessages(data || [])
 
+      const { data: matchData, error: matchError } = await supabase
+        .from('matches')
+        .select('status')
+        .eq('id', params.matchId)
+        .single()
+
+      if (matchError) throw matchError
+      setMatchStatus(matchData.status)
+
       supabase
         .channel(`chat:${params.matchId}`)
         .on('postgres_changes', {
@@ -63,6 +74,29 @@ export default function ChatPage({ params }: { params: { matchId: string } }) {
       setError('채팅을 불러오는데 실패했습니다.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function completeMatch() {
+    if (matchStatus !== 'active') return
+
+    const confirmed = window.confirm('경기를 종료하시겠어요? 종료 후 리뷰를 작성할 수 있어요.')
+    if (!confirmed) return
+
+    try {
+      setCompleting(true)
+      const { error: updateError } = await supabase
+        .from('matches')
+        .update({ status: 'completed' })
+        .eq('id', params.matchId)
+
+      if (updateError) throw updateError
+      setMatchStatus('completed')
+    } catch (e) {
+      console.error('경기 종료 오류:', e)
+      alert('경기 종료에 실패했습니다. 잠시 후 다시 시도해 주세요.')
+    } finally {
+      setCompleting(false)
     }
   }
 
@@ -106,6 +140,35 @@ export default function ChatPage({ params }: { params: { matchId: string } }) {
 
   return (
     <div className="flex flex-col h-[calc(100vh-120px)]">
+      {matchStatus === 'active' && (
+        <div className="mb-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-amber-900">경기가 끝났다면 종료 처리해 주세요</p>
+              <p className="text-xs text-amber-700 mt-1">종료 후 서로 리뷰를 남길 수 있어요.</p>
+            </div>
+            <button onClick={completeMatch} disabled={completing} className="btn-secondary whitespace-nowrap px-3 py-2 text-sm">
+              {completing ? '처리 중...' : '경기 종료'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {matchStatus === 'completed' && (
+        <div className="mb-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold text-emerald-900">경기가 완료됐어요 🎉</p>
+            <p className="text-xs text-emerald-700 mt-1">매너 리뷰를 남기고 신뢰도를 높여보세요.</p>
+          </div>
+          <button
+            onClick={() => router.push(`/review/${params.matchId}`)}
+            className="btn-primary whitespace-nowrap px-3 py-2 text-sm"
+          >
+            리뷰 작성
+          </button>
+        </div>
+      )}
+
       <div className="flex-1 overflow-y-auto py-4 space-y-3">
         {messages.map(msg => {
           const isMine = msg.user_id === myId
