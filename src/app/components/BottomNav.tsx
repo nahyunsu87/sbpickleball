@@ -34,6 +34,17 @@ const navItems = [
     ),
   },
   {
+    href: '/admin',
+    label: '테스트',
+    icon: (active: boolean) => (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? '#00B386' : '#9CA3AF'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="4" width="18" height="14" rx="2" />
+        <path d="M8 20h8" />
+        <path d="M12 18v2" />
+      </svg>
+    ),
+  },
+  {
     href: '/profile',
     label: '프로필',
     icon: (active: boolean) => (
